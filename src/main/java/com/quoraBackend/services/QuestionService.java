@@ -7,6 +7,7 @@ import com.quoraBackend.models.Questions;
 import com.quoraBackend.repositories.QuestionRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -32,5 +33,20 @@ public class QuestionService implements IQuestionService{
                 .doOnSuccess(response -> System.out.println("Question created successfully : " + response))
                 .doOnError(error -> System.out.println("Error creating question: "+error));
 
+    }
+
+    @Override
+    public Mono<QuestionResponseDTO> getById(String id) {
+        return questionRepo.findById(id)
+                .map(QuestionAdapter::toQuestionResponseDTO)
+                .doOnSuccess(response -> System.out.println("Question found: " + response))
+                .doOnError(error -> System.out.println("Error finding question: " + error));
+    }
+
+    @Override
+    public Flux<QuestionResponseDTO> findAll() {
+        return questionRepo.findAll()
+                .map(QuestionAdapter::toQuestionResponseDTO)
+                .doOnError(error -> System.out.println("Internal Error"));
     }
 }

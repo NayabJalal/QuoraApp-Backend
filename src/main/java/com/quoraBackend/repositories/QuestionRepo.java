@@ -8,4 +8,10 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 public interface QuestionRepo extends ReactiveMongoRepository<Questions , String> {
+    Mono<Questions> findById(String id);
+
+    Flux<Questions> findAll();
+
+    Mono<Void> deleteById(String id);
+
 }
