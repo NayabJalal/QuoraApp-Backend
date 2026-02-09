@@ -7,7 +7,6 @@ import com.quoraBackend.models.Questions;
 import com.quoraBackend.repositories.QuestionRepo;
 import com.quoraBackend.util.CursorUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.context.config.ConfigDataResourceNotFoundException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -15,6 +14,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor //No need of constructor injection of QuestionRepo using this annotation
@@ -24,11 +28,14 @@ public class QuestionService implements IQuestionService{
 
     @Override
     public Mono<QuestionResponseDTO> createQuestion(QuestionRequestDTO questionRequestDTO) {
+        List<String> rawTags = questionRequestDTO.getTags();
+        List<String> tag = normalizeTags(rawTags);
         Questions questions = Questions.builder()
                 .title(questionRequestDTO.getTitle())
                 .content(questionRequestDTO.getContent())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
+                .tags(tag)
                 .build();
 
                // save in mongoDb and return a mono of question
@@ -37,6 +44,17 @@ public class QuestionService implements IQuestionService{
                 .doOnSuccess(response -> System.out.println("Question created successfully : " + response))
                 .doOnError(error -> System.out.println("Error creating question: "+error));
 
+    }
+    private List<String> normalizeTags(List<String> tags){
+        if (tags == null || tags.isEmpty()) return Collections.emptyList();
+        return tags.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(tag -> !tag.isEmpty())
+                .map(String::toLowerCase)
+                .distinct()
+                .limit(5)
+                .collect(Collectors.toList());
     }
 
     @Override

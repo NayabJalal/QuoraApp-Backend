@@ -13,7 +13,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 @Data
 @Builder
@@ -38,4 +40,8 @@ public class Questions {
 
     @LastModifiedDate //automatically updates a field with the current timestamp whenever the entity is updated in the database.
     private LocalDateTime updatedAt;
+
+    @NotBlank(message = "Tags are required")
+    @Size(max = 5, message = "You can only have up to 5 tags total")
+    private List<@Size(min = 3, max = 30, message = "Each tag must be 3-30 characters!") String> tags;
 }

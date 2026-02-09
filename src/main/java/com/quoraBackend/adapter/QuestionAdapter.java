@@ -12,6 +12,7 @@ public class QuestionAdapter {
                 .title(questions.getTitle())
                 .content(questions.getContent())
                 .createdAt(questions.getCreatedAt())
+                .tags(questions.getTags())
                 .build();
     }
 }
