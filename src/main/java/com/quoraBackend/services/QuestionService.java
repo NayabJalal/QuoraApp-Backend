@@ -4,6 +4,8 @@ import com.quoraBackend.adapter.QuestionAdapter;
 import com.quoraBackend.dto.QuestionRequestDTO;
 import com.quoraBackend.dto.QuestionResponseDTO;
 import com.quoraBackend.events.ViewCountEvent;
+import com.quoraBackend.exceptions.InvalidRequestException;
+import com.quoraBackend.exceptions.ResourceNotFoundException;
 import com.quoraBackend.models.QuestionElasticDocument;
 import com.quoraBackend.models.Questions;
 import com.quoraBackend.producers.KafkaEventProducer;
@@ -149,14 +151,14 @@ public class QuestionService implements IQuestionService{
     @Override
     public Mono<QuestionResponseDTO> deleteTag(String id, String tag) {
         if (tag == null || tag.trim().isEmpty()) {
-            return Mono.error(new RuntimeException("Tag cannot be empty"));
+            return Mono.error(new InvalidRequestException("Tag cannot be empty"));
         }
         String normalizedTag = tag.trim().toLowerCase();
         return questionRepo.removeTagById(id, normalizedTag)
                 .flatMap(updatedCount -> {
                     if (updatedCount == 0) {
                         return Mono.error(
-                                new RuntimeException("Question not found or tag not present")
+                                new ResourceNotFoundException("Question not found or tag not present")
                         );
                     }
                     return questionRepo.findById(id);

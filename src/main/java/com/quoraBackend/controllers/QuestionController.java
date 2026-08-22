@@ -4,6 +4,7 @@ import com.quoraBackend.dto.QuestionRequestDTO;
 import com.quoraBackend.dto.QuestionResponseDTO;
 import com.quoraBackend.models.QuestionElasticDocument;
 import com.quoraBackend.services.IQuestionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -23,7 +24,7 @@ public class QuestionController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<QuestionResponseDTO> createQuestion(@RequestBody QuestionRequestDTO questionRequestDTO){
+    public Mono<QuestionResponseDTO> createQuestion(@Valid @RequestBody QuestionRequestDTO questionRequestDTO){
 
         return questionService.createQuestion(questionRequestDTO)
                 .doOnSuccess(response ->
