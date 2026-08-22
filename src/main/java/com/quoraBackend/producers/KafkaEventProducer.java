@@ -3,9 +3,11 @@ package com.quoraBackend.producers;
 import com.quoraBackend.config.KafkaConfig;
 import com.quoraBackend.events.ViewCountEvent;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KafkaEventProducer {
@@ -15,7 +17,7 @@ public class KafkaEventProducer {
         kafkaTemplate.send(KafkaConfig.TOPIC_NAME,viewCountEvent.getTargetId() , viewCountEvent) //key, value - viewCount
                 .whenComplete((result , err) -> {
                     if (err!=null){
-                        System.out.println("Error Publishing view count event :" +err.getMessage());
+                        log.info("\"Error Publishing view count event : {}",err.getMessage());
                     }
                 });
     }

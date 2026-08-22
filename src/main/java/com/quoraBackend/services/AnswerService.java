@@ -9,6 +9,7 @@ import com.quoraBackend.producers.KafkaEventProducer;
 import com.quoraBackend.repositories.AnswersRepo;
 import com.quoraBackend.repositories.QuestionRepo;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AnswerService implements IAnswerService{
 
@@ -31,8 +33,12 @@ public class AnswerService implements IAnswerService{
                     return answersRepo.save(answer);
                 })
                 .map(AnswerAdapter::toAnswerResponseDTO)
-                .doOnSuccess(response -> System.out.println("Answer created successfully: " + response))
-                .doOnError(error -> System.out.println("Error creating answer: "+error));
+                .doOnSuccess(response ->
+                        log.info("Answer created successfully: {}", response)
+                )
+                .doOnError(error ->
+                        log.error("Error creating answer", error)
+                );
     }
 
     @Override
@@ -41,20 +47,25 @@ public class AnswerService implements IAnswerService{
                 .map(AnswerAdapter::toAnswerResponseDTO)
                 .doOnSuccess(response -> {
                     if (response != null){
-                        System.out.println("Answer retrieved successfully: " + response);
+                        log.info("\"Answer retrieved successfully: {}",response);
                         ViewCountEvent viewCountEvent = new ViewCountEvent(answerId, "answer", LocalDateTime.now()); // Increment view count by 1
                         kafkaEventProducer.publishViewCountEvent(viewCountEvent); // Publish view count event to Kafka
                     }
                 })
-                .doOnError(error -> System.out.println("Error retrieving answer: "+error));
+                .doOnError(error ->
+                        log.error("Error retrieving answer", error));
     }
 
     @Override
     public Flux<AnswerResponseDTO> getAnswersByQuestion(String questionId) {
         return answersRepo.findByQuestionId(questionId)
                 .map(AnswerAdapter::toAnswerResponseDTO)
-                .doOnComplete(() -> System.out.println("All answers retrieved successfully for questionId: " + questionId))
-                .doOnError(error -> System.out.println("Error retrieving answers for questionId " + questionId + ": " + error));
+                .doOnComplete(() ->
+                        log.info("All answers retrieved successfully for questionId: {}", questionId)
+                )
+                .doOnError(error ->
+                        log.error("Error retrieving answers for questionId: {}", questionId, error)
+                );
     }
 
     @Override
@@ -66,14 +77,22 @@ public class AnswerService implements IAnswerService{
                     return answersRepo.save(existingAnswer);
                 })
                 .map(AnswerAdapter::toAnswerResponseDTO)
-                .doOnSuccess(response -> System.out.println("Answer updated successfully: " + response))
-                .doOnError(error -> System.out.println("Error updating answer with id " + answerId + ": " + error));
+                .doOnSuccess(response ->
+                        log.info("Answer updated successfully: {}", response)
+                )
+                .doOnError(error ->
+                        log.error("Error updating answer with id: {}", answerId, error)
+                );
     }
 
     @Override
     public Mono<Void> deleteAnswer(String questionId, String answerId) {
         return answersRepo.deleteByIdAndQuestionId(answerId, questionId)
-                .doOnSuccess(unused -> System.out.println("Answer deleted successfully with id: " + answerId))
-                .doOnError(error -> System.out.println("Error deleting answer with id " + answerId + ": " + error));
+                .doOnSuccess(unused ->
+                        log.info("Answer deleted successfully with id: {}", answerId)
+                )
+                .doOnError(error ->
+                        log.error("Error deleting answer with id: {}", answerId, error)
+                );
     }
 }

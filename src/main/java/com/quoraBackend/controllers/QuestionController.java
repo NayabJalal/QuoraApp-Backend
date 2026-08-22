@@ -5,6 +5,7 @@ import com.quoraBackend.dto.QuestionResponseDTO;
 import com.quoraBackend.models.QuestionElasticDocument;
 import com.quoraBackend.services.IQuestionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -12,6 +13,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/questions")
@@ -24,15 +26,19 @@ public class QuestionController {
     public Mono<QuestionResponseDTO> createQuestion(@RequestBody QuestionRequestDTO questionRequestDTO){
 
         return questionService.createQuestion(questionRequestDTO)
-                .doOnSuccess(response -> System.out.println("Question created successfully : " + response))
-                .doOnError(error -> System.out.println("Error creating question: "+error));
+                .doOnSuccess(response ->
+                        log.info("Question created successfully: {}", response))
+                .doOnError(error ->
+                        log.error("Error creating question", error));
     }
 
     @GetMapping("/{id}")
     public Mono<QuestionResponseDTO> getById(@PathVariable String id){
         return questionService.getQuestionById(id)
-                .doOnSuccess(response -> System.out.println("Question fetched successfully: " + response))
-                .doOnError(error -> System.out.println("Error fetching question: " + error));
+                .doOnSuccess(response ->
+                        log.info("Question fetched successfully: {}", response))
+                .doOnError(error ->
+                        log.error("Error fetching question", error));
     }
 
     @GetMapping
@@ -41,16 +47,20 @@ public class QuestionController {
             @RequestParam(defaultValue = "10") int size
     ){
         return questionService.findAll(cursor, size)
-                .doOnError(error -> System.out.println("Error fetching questions : "+ error))
-                .doOnComplete(() -> System.out.println("Question fetching successfully"));
+                .doOnError(error ->
+                        log.error("Error fetching questions", error))
+                .doOnComplete(() ->
+                        log.info("Questions fetched successfully"));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteById(@PathVariable String id){
         return questionService.deleteById(id)
-                .doOnSuccess(v -> System.out.println("Successfully deleted the Question "+id))
-                .doOnError(error -> System.out.println("Failed to delete id "+ id));
+                .doOnSuccess(v ->
+                        log.info("Question deleted successfully with id: {}", id))
+                .doOnError(error ->
+                        log.error("Failed to delete question with id: {}", id, error));
     }
 
     @GetMapping("/search")
