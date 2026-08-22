@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -16,17 +16,20 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "likes")
+@CompoundIndex(name = "user_target_type_idx", def = "{'userId': 1, 'targetId': 1, 'targetType': 1}", unique = true)
 public class Like {
 
     @Id
     private String id;
 
+    private String userId;
+
     private String targetId;
 
-    private String targetType; //Question , Answer
+    private String targetType;
 
-    private Boolean isLike;
+    private Boolean liked;
 
-    @CreatedDate //automatically captures the timestamp when an entity is first saved, Add @EnableJpaAuditing
+    @CreatedDate
     private LocalDateTime createdAt;
 }

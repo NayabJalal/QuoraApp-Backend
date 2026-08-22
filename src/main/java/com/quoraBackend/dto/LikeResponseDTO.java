@@ -1,7 +1,5 @@
 package com.quoraBackend.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,11 +14,15 @@ import java.time.LocalDateTime;
 public class LikeResponseDTO {
     private String id;
 
+    private String userId;
+
     private String targetId;
 
     private String targetType;
 
-    private Boolean isLike;
+    private Boolean liked;
 
     private LocalDateTime createdAt;
+
+    private Long count;
 }

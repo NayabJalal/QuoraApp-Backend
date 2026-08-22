@@ -13,6 +13,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LikeRequestDTO {
 
+    @NotBlank(message = "User ID is required")
+    private String userId;
+
     @NotBlank(message = "Target ID is required")
     private String targetId;
 
@@ -20,5 +23,5 @@ public class LikeRequestDTO {
     private String targetType;
 
     @NotNull(message = "Is Like is required")
-    private Boolean isLike;
+    private Boolean liked;
 }
