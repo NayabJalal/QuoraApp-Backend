@@ -6,11 +6,11 @@ import com.quoraBackend.dto.QuestionResponseDTO;
 import com.quoraBackend.events.ViewCountEvent;
 import com.quoraBackend.exceptions.InvalidRequestException;
 import com.quoraBackend.exceptions.ResourceNotFoundException;
+import com.quoraBackend.models.Answer;
 import com.quoraBackend.models.QuestionElasticDocument;
 import com.quoraBackend.models.Questions;
 import com.quoraBackend.producers.KafkaEventProducer;
-import com.quoraBackend.repositories.QuestionDocumentRepo;
-import com.quoraBackend.repositories.QuestionRepo;
+import com.quoraBackend.repositories.*;
 import com.quoraBackend.util.CursorUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,10 +29,13 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor //No need of constructor injection of QuestionRepo using this annotation
-public class QuestionService implements IQuestionService{
+@RequiredArgsConstructor
+public class QuestionService implements IQuestionService {
 
     private final QuestionRepo questionRepo;
+    private final AnswersRepo answersRepo;
+    private final CommentRepo commentRepo;
+    private final LikeRepo likeRepo;
     private final KafkaEventProducer kafkaEventProducer;
     private final IQuestionIndexService questionIndexService;
     private final QuestionDocumentRepo questionDocumentRepo;
@@ -49,7 +52,6 @@ public class QuestionService implements IQuestionService{
                 .tags(tag)
                 .build();
 
-               // save in mongoDb and return a mono of question
         return questionRepo.save(questions)
                 .map(QuestionAdapter::toQuestionResponseDTO)
                 .doOnSuccess(response ->
@@ -58,7 +60,7 @@ public class QuestionService implements IQuestionService{
                         log.error("Error creating question", error));
     }
 
-    private List<String> normalizeTags(List<String> tags){
+    private List<String> normalizeTags(List<String> tags) {
         if (tags == null || tags.isEmpty()) return Collections.emptyList();
         return tags.stream()
                 .filter(Objects::nonNull)
@@ -78,16 +80,15 @@ public class QuestionService implements IQuestionService{
                         log.error("Error finding question with id: {}", id, error))
                 .doOnSuccess(response -> {
                     log.info("Question fetched successfully: {}", response);
-                    ViewCountEvent viewCountEvent = new ViewCountEvent(id,"question", LocalDateTime.now());
+                    ViewCountEvent viewCountEvent = new ViewCountEvent(id, "question", LocalDateTime.now());
                     kafkaEventProducer.publishViewCountEvent(viewCountEvent);
                 });
-
     }
 
     @Override
-    public Flux<QuestionResponseDTO> findAll(String cursor , int size) {
-        Pageable pageable = PageRequest.of(0,size);
-        if (!CursorUtils.isValidCursor(cursor)){
+    public Flux<QuestionResponseDTO> findAll(String cursor, int size) {
+        Pageable pageable = PageRequest.of(0, size);
+        if (!CursorUtils.isValidCursor(cursor)) {
             return questionRepo.findTop10ByOrderByCreatedAtAsc()
                     .take(size)
                     .map(QuestionAdapter::toQuestionResponseDTO)
@@ -97,7 +98,7 @@ public class QuestionService implements IQuestionService{
                             log.info("Questions fetched successfully"));
         } else {
             LocalDateTime cursorTimeStamp = CursorUtils.parseCursor(cursor);
-            return questionRepo.findByCreatedAtGreaterThanOrderByCreatedAtAsc(cursorTimeStamp , pageable)
+            return questionRepo.findByCreatedAtGreaterThanOrderByCreatedAtAsc(cursorTimeStamp, pageable)
                     .map(QuestionAdapter::toQuestionResponseDTO)
                     .doOnError(error ->
                             log.error("Error fetching questions", error))
@@ -108,11 +109,30 @@ public class QuestionService implements IQuestionService{
 
     @Override
     public Mono<Void> deleteById(String id) {
-        return questionRepo.deleteById(id)
-                .doOnSuccess(v ->
-                        log.info("Question deleted successfully: {}", id))
-                .doOnError(error ->
-                        log.error("Failed to delete question with id: {}", id, error));
+        return questionRepo.findById(id)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Question not found with id: " + id)))
+                .flatMap(question ->
+                        // Step 1: Fetch all Answer IDs linked to this question
+                        answersRepo.findByQuestionId(id)
+                                .map(Answer::getId)
+                                .collectList()
+                                .flatMap(answerIds -> {
+                                    // Step 2: Combine Question ID + Answer IDs into one target list
+                                    List<String> allTargetIds = new ArrayList<>(answerIds);
+                                    allTargetIds.add(id);
+
+                                    // Step 3: Cascading delete comments, likes, and answers concurrently
+                                    return Mono.when(
+                                            commentRepo.deleteByTargetIdIn(allTargetIds),
+                                            likeRepo.deleteByTargetIdIn(allTargetIds),
+                                            answersRepo.deleteByQuestionId(id)
+                                    );
+                                })
+                                // Step 4: Finally delete the question document
+                                .then(questionRepo.delete(question))
+                )
+                .doOnSuccess(v -> log.info("Question and all related answers/comments/likes deleted for id: {}", id))
+                .doOnError(error -> log.error("Failed to delete question with id: {}", id, error));
     }
 
     @Override
@@ -136,6 +156,7 @@ public class QuestionService implements IQuestionService{
                 .distinct()
                 .sort();
     }
+
     @Override
     public Flux<QuestionResponseDTO> searchByTag(List<String> tag, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -147,6 +168,7 @@ public class QuestionService implements IQuestionService{
                 .doOnError(error ->
                         log.error("Error searching questions by tag", error));
     }
+
     @Override
     public Mono<QuestionResponseDTO> deleteTag(String id, String tag) {
         if (tag == null || tag.trim().isEmpty()) {
@@ -164,8 +186,10 @@ public class QuestionService implements IQuestionService{
                 })
                 .map(QuestionAdapter::toQuestionResponseDTO);
     }
-    public List<QuestionElasticDocument> searchQuestionsByElasticsearch(String query){
-        return questionDocumentRepo.findByTitleContainingOrContentContaining(query,query);
+
+    @Override
+    public List<QuestionElasticDocument> searchQuestionsByElasticsearch(String query) {
+        return questionDocumentRepo.findByTitleContainingOrContentContaining(query, query);
     }
 
     @Override

@@ -10,5 +10,5 @@ import reactor.core.publisher.Mono;
 public interface AnswersRepo extends ReactiveMongoRepository<Answer, String> {
     Flux<Answer> findByQuestionId(String questionId);
     Mono<Answer> findByIdAndQuestionId(String id, String questionId);
-    Mono<Void> deleteByIdAndQuestionId(String id, String questionId);
+    Mono<Void> deleteByQuestionId(String questionId);
 }

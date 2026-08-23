@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -19,5 +20,9 @@ public class CommentResponseDTO {
     private String targetId;
     private String targetType;
     private String parentId;
+
+    private Long replyCount;
+    private List<CommentResponseDTO> previewReplies;
+
     private LocalDateTime createdAt;
 }

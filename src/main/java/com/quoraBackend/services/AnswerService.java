@@ -4,9 +4,12 @@ import com.quoraBackend.adapter.AnswerAdapter;
 import com.quoraBackend.dto.AnswerRequestDTO;
 import com.quoraBackend.dto.AnswerResponseDTO;
 import com.quoraBackend.events.ViewCountEvent;
+import com.quoraBackend.exceptions.ResourceNotFoundException;
 import com.quoraBackend.models.Answer;
 import com.quoraBackend.producers.KafkaEventProducer;
 import com.quoraBackend.repositories.AnswersRepo;
+import com.quoraBackend.repositories.CommentRepo;
+import com.quoraBackend.repositories.LikeRepo;
 import com.quoraBackend.repositories.QuestionRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,8 @@ public class AnswerService implements IAnswerService{
 
     private final AnswersRepo answersRepo;
     private final QuestionRepo questionRepo;
+    private final LikeRepo likeRepo;
+    private final CommentRepo commentRepo;
     private final KafkaEventProducer kafkaEventProducer;
 
     @Override
@@ -87,12 +92,16 @@ public class AnswerService implements IAnswerService{
 
     @Override
     public Mono<Void> deleteAnswer(String questionId, String answerId) {
-        return answersRepo.deleteByIdAndQuestionId(answerId, questionId)
-                .doOnSuccess(unused ->
-                        log.info("Answer deleted successfully with id: {}", answerId)
-                )
-                .doOnError(error ->
-                        log.error("Error deleting answer with id: {}", answerId, error)
+        return answersRepo.findByIdAndQuestionId(answerId, questionId)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException(
+                        "Answer not found with id: " + answerId + " for question: " + questionId)))
+                .flatMap(answer ->
+                        // 1. Delete all comments under this answer
+                        commentRepo.deleteByTargetId(answerId)
+                                // 2. Delete all likes for this answer
+                                .then(likeRepo.deleteByTargetId(answerId))
+                                // 3. Delete the answer itself
+                                .then(answersRepo.delete(answer))
                 );
     }
 }
