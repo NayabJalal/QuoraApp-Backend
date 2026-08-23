@@ -66,11 +66,11 @@ public class QuestionController {
 
     @GetMapping("/search")
     public Flux<QuestionResponseDTO> searchQuestions(
-        @RequestParam String query,
-        @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
-    ){
-        return questionService.searchQuestions(query,page,size);
+            @RequestParam String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return questionService.searchQuestions(query, page, size);
     }
 
     @GetMapping("/tags/all")
@@ -99,5 +99,25 @@ public class QuestionController {
     @GetMapping("/elasticsearch")
     public List<QuestionElasticDocument> searchQuestionByElasticsearch(@RequestParam String query){
         return questionService.searchQuestionsByElasticsearch(query);
+    }
+
+    @PutMapping("/{id}")
+    public Mono<QuestionResponseDTO> updateQuestion(
+            @PathVariable String id,
+            @Valid @RequestBody QuestionRequestDTO questionRequestDTO
+    ) {
+        return questionService.updateQuestion(id, questionRequestDTO)
+                .doOnSuccess(response -> log.info("Question updated successfully: {}", response))
+                .doOnError(error -> log.error("Error updating question with id: {}", id, error));
+    }
+
+    @PostMapping("/{id}/tags")
+    public Mono<QuestionResponseDTO> addTags(
+            @PathVariable String id,
+            @RequestParam List<String> tags
+    ) {
+        return questionService.addTags(id, tags)
+                .doOnSuccess(response -> log.info("Tags added successfully to question: {}", id))
+                .doOnError(error -> log.error("Error adding tags to question with id: {}", id, error));
     }
 }

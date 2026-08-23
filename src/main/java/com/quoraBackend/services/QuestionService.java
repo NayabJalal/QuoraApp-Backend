@@ -21,6 +21,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -50,12 +51,9 @@ public class QuestionService implements IQuestionService{
 
                // save in mongoDb and return a mono of question
         return questionRepo.save(questions)
-                .map(savedQuestion -> {
-                    questionIndexService.createQuestionIndex(savedQuestion); //dumping the question into elastic Search
-                    return QuestionAdapter.toQuestionResponseDTO(savedQuestion);
-                })
+                .map(QuestionAdapter::toQuestionResponseDTO)
                 .doOnSuccess(response ->
-                        log.info("Question created successfully: {}", response))
+                        log.info("Question created successfully with id: {}", response.getId()))
                 .doOnError(error ->
                         log.error("Error creating question", error));
     }
@@ -118,14 +116,15 @@ public class QuestionService implements IQuestionService{
     }
 
     @Override
-    public Flux<QuestionResponseDTO> searchQuestions(String searchTerm, int offset, int page) {
-        return questionRepo.findByTitleOrContentContainingIgnoreCase(searchTerm, PageRequest.of(offset,page))
+    public Flux<QuestionResponseDTO> searchQuestions(String searchTerm, int page, int size) {
+        return questionRepo.findByTitleOrContentContainingIgnoreCase(searchTerm, PageRequest.of(page, size))
                 .map(QuestionAdapter::toQuestionResponseDTO)
                 .doOnError(error ->
                         log.error("Error finding questions for search term: {}", searchTerm, error))
                 .doOnComplete(() ->
                         log.info("Questions searched successfully"));
     }
+
     @Override
     public Flux<String> getAllTags() {
         return questionRepo.findAllTagsOnly()
@@ -167,5 +166,42 @@ public class QuestionService implements IQuestionService{
     }
     public List<QuestionElasticDocument> searchQuestionsByElasticsearch(String query){
         return questionDocumentRepo.findByTitleContainingOrContentContaining(query,query);
+    }
+
+    @Override
+    public Mono<QuestionResponseDTO> updateQuestion(String id, QuestionRequestDTO questionRequestDTO) {
+        List<String> normalizedTags = normalizeTags(questionRequestDTO.getTags());
+        return questionRepo.findById(id)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Question not found with id: " + id)))
+                .flatMap(existingQuestion -> {
+                    existingQuestion.setTitle(questionRequestDTO.getTitle());
+                    existingQuestion.setContent(questionRequestDTO.getContent());
+                    existingQuestion.setTags(normalizedTags);
+                    existingQuestion.setUpdatedAt(LocalDateTime.now());
+                    return questionRepo.save(existingQuestion);
+                })
+                .map(QuestionAdapter::toQuestionResponseDTO)
+                .doOnSuccess(response -> log.info("Question updated successfully with id: {}", id))
+                .doOnError(error -> log.error("Error updating question with id: {}", id, error));
+    }
+
+    @Override
+    public Mono<QuestionResponseDTO> addTags(String id, List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return Mono.error(new InvalidRequestException("Tags list cannot be empty"));
+        }
+        return questionRepo.findById(id)
+                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Question not found with id: " + id)))
+                .flatMap(existingQuestion -> {
+                    List<String> currentTags = existingQuestion.getTags() != null
+                            ? new ArrayList<>(existingQuestion.getTags())
+                            : new ArrayList<>();
+                    currentTags.addAll(tags);
+
+                    existingQuestion.setTags(normalizeTags(currentTags));
+                    existingQuestion.setUpdatedAt(LocalDateTime.now());
+                    return questionRepo.save(existingQuestion);
+                })
+                .map(QuestionAdapter::toQuestionResponseDTO);
     }
 }

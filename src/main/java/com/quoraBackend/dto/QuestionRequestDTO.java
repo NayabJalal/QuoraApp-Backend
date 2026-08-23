@@ -12,7 +12,7 @@ import java.util.List;
 public class QuestionRequestDTO {
 
     @NotBlank(message = "Title is required")
-    @Size(min = 10 , max = 100, message = "Title must be between 10 and 1000 characters!!") //@Size annotation is used to validate the length of a String or the number of elements in a Collection, Map, or Array
+    @Size(min = 10 , max = 100, message = "Title must be between 10 and 100 characters!!") //@Size annotation is used to validate the length of a String or the number of elements in a Collection, Map, or Array
     private String title;
 
     @NotBlank(message = "Content is required")

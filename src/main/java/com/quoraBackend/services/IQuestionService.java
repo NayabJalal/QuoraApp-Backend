@@ -17,7 +17,7 @@ public interface IQuestionService {
 
     public Mono<Void> deleteById(String id);
 
-    public Flux<QuestionResponseDTO> searchQuestions(String searchTerm, int offset, int page);
+    Flux<QuestionResponseDTO> searchQuestions(String searchTerm, int page, int size);
 
     public Flux<QuestionResponseDTO> searchByTag(List<String> tag, int page, int size);
 
@@ -26,4 +26,8 @@ public interface IQuestionService {
     Mono<QuestionResponseDTO> deleteTag(String id, String tag);
 
     List<QuestionElasticDocument> searchQuestionsByElasticsearch(String query);
+
+    Mono<QuestionResponseDTO> updateQuestion(String id, QuestionRequestDTO questionRequestDTO);
+
+    Mono<QuestionResponseDTO> addTags(String id, List<String> tags);
 }

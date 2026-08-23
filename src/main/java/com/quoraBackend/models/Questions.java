@@ -2,6 +2,7 @@ package com.quoraBackend.models;
 
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,8 +14,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 @Data
@@ -32,7 +31,7 @@ public class Questions {
     private String title;
 
     @NotBlank(message = "Content is required")
-    @Size(min = 10 , max = 1000, message = "Content must be between 10 and 100 characters!!") //@Size annotation is used to validate the length of a String or the number of elements in a Collection, Map, or Array
+    @Size(min = 10 , max = 1000, message = "Content must be between 10 and 1000 characters!!") //@Size annotation is used to validate the length of a String or the number of elements in a Collection, Map, or Array
     private String content;
 
     private Integer views;
@@ -43,7 +42,7 @@ public class Questions {
     @LastModifiedDate //automatically updates a field with the current timestamp whenever the entity is updated in the database.
     private LocalDateTime updatedAt;
 
-    @NotBlank(message = "Tags are required")
+    @NotEmpty(message = "Tags are required")
     @Size(max = 5, message = "You can only have up to 5 tags total")
     private List<@Size(min = 3, max = 30, message = "Each tag must be 3-30 characters!") String> tags;
 }
