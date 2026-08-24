@@ -3,6 +3,7 @@ package com.quoraBackend.services;
 import com.quoraBackend.adapter.QuestionAdapter;
 import com.quoraBackend.dto.QuestionRequestDTO;
 import com.quoraBackend.dto.QuestionResponseDTO;
+import com.quoraBackend.events.QuestionEvent;
 import com.quoraBackend.events.ViewCountEvent;
 import com.quoraBackend.exceptions.InvalidRequestException;
 import com.quoraBackend.exceptions.ResourceNotFoundException;
@@ -12,6 +13,7 @@ import com.quoraBackend.models.Questions;
 import com.quoraBackend.producers.KafkaEventProducer;
 import com.quoraBackend.repositories.*;
 import com.quoraBackend.util.CursorUtils;
+import com.quoraBackend.util.TagUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -22,10 +24,8 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -43,7 +43,7 @@ public class QuestionService implements IQuestionService {
     @Override
     public Mono<QuestionResponseDTO> createQuestion(QuestionRequestDTO questionRequestDTO) {
         List<String> rawTags = questionRequestDTO.getTags();
-        List<String> tag = normalizeTags(rawTags);
+        List<String> tag = TagUtils.normalizeTags(rawTags);
         Questions questions = Questions.builder()
                 .title(questionRequestDTO.getTitle())
                 .content(questionRequestDTO.getContent())
@@ -54,22 +54,14 @@ public class QuestionService implements IQuestionService {
 
         return questionRepo.save(questions)
                 .map(QuestionAdapter::toQuestionResponseDTO)
-                .doOnSuccess(response ->
-                        log.info("Question created successfully with id: {}", response.getId()))
+                .doOnSuccess(response -> {
+                    log.info("Question created successfully with id: {}", response.getId());
+                    kafkaEventProducer.publishQuestionEvent(
+                            QuestionAdapter.toQuestionEvent(response, QuestionEvent.EventType.CREATED)
+                    );
+                })
                 .doOnError(error ->
                         log.error("Error creating question", error));
-    }
-
-    private List<String> normalizeTags(List<String> tags) {
-        if (tags == null || tags.isEmpty()) return Collections.emptyList();
-        return tags.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(tag -> !tag.isEmpty())
-                .map(String::toLowerCase)
-                .distinct()
-                .limit(5)
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -112,26 +104,27 @@ public class QuestionService implements IQuestionService {
         return questionRepo.findById(id)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Question not found with id: " + id)))
                 .flatMap(question ->
-                        // Step 1: Fetch all Answer IDs linked to this question
                         answersRepo.findByQuestionId(id)
                                 .map(Answer::getId)
                                 .collectList()
                                 .flatMap(answerIds -> {
-                                    // Step 2: Combine Question ID + Answer IDs into one target list
                                     List<String> allTargetIds = new ArrayList<>(answerIds);
                                     allTargetIds.add(id);
 
-                                    // Step 3: Cascading delete comments, likes, and answers concurrently
                                     return Mono.when(
                                             commentRepo.deleteByTargetIdIn(allTargetIds),
                                             likeRepo.deleteByTargetIdIn(allTargetIds),
                                             answersRepo.deleteByQuestionId(id)
                                     );
                                 })
-                                // Step 4: Finally delete the question document
                                 .then(questionRepo.delete(question))
                 )
-                .doOnSuccess(v -> log.info("Question and all related answers/comments/likes deleted for id: {}", id))
+                .doOnSuccess(v -> {
+                    log.info("Question and all related entities deleted for id: {}", id);
+                    kafkaEventProducer.publishQuestionEvent(
+                            QuestionAdapter.toDeleteQuestionEvent(id)
+                    );
+                })
                 .doOnError(error -> log.error("Failed to delete question with id: {}", id, error));
     }
 
@@ -160,7 +153,7 @@ public class QuestionService implements IQuestionService {
     @Override
     public Flux<QuestionResponseDTO> searchByTag(List<String> tag, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        List<String> normalizedTags = normalizeTags(tag);
+        List<String> normalizedTags = TagUtils.normalizeTags(tag);
         return questionRepo.findByTagsIn(normalizedTags, pageable)
                 .map(QuestionAdapter::toQuestionResponseDTO)
                 .doOnComplete(() ->
@@ -194,7 +187,7 @@ public class QuestionService implements IQuestionService {
 
     @Override
     public Mono<QuestionResponseDTO> updateQuestion(String id, QuestionRequestDTO questionRequestDTO) {
-        List<String> normalizedTags = normalizeTags(questionRequestDTO.getTags());
+        List<String> normalizedTags = TagUtils.normalizeTags(questionRequestDTO.getTags());
         return questionRepo.findById(id)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException("Question not found with id: " + id)))
                 .flatMap(existingQuestion -> {
@@ -205,7 +198,12 @@ public class QuestionService implements IQuestionService {
                     return questionRepo.save(existingQuestion);
                 })
                 .map(QuestionAdapter::toQuestionResponseDTO)
-                .doOnSuccess(response -> log.info("Question updated successfully with id: {}", id))
+                .doOnSuccess(response -> {
+                    log.info("Question updated successfully with id: {}", id);
+                    kafkaEventProducer.publishQuestionEvent(
+                            QuestionAdapter.toQuestionEvent(response, QuestionEvent.EventType.UPDATED)
+                    );
+                })
                 .doOnError(error -> log.error("Error updating question with id: {}", id, error));
     }
 
@@ -222,7 +220,7 @@ public class QuestionService implements IQuestionService {
                             : new ArrayList<>();
                     currentTags.addAll(tags);
 
-                    existingQuestion.setTags(normalizeTags(currentTags));
+                    existingQuestion.setTags(TagUtils.normalizeTags(currentTags));
                     existingQuestion.setUpdatedAt(LocalDateTime.now());
                     return questionRepo.save(existingQuestion);
                 })

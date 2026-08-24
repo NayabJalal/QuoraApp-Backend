@@ -1,6 +1,7 @@
 package com.quoraBackend.producers;
 
 import com.quoraBackend.config.KafkaConfig;
+import com.quoraBackend.events.QuestionEvent;
 import com.quoraBackend.events.ViewCountEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,18 @@ public class KafkaEventProducer {
                 .whenComplete((result , err) -> {
                     if (err!=null){
                         log.info("\"Error Publishing view count event : {}",err.getMessage());
+                    }
+                });
+    }
+    public void publishQuestionEvent(QuestionEvent event) {
+        kafkaTemplate.send("question-events", event.getQuestionId(), event)
+                .whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        log.info("Published QuestionEvent [{}] for id: {}",
+                                event.getEventType(), event.getQuestionId());
+                    } else {
+                        log.error("Failed to publish QuestionEvent for id: {}",
+                                event.getQuestionId(), ex);
                     }
                 });
     }
